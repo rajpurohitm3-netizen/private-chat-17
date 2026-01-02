@@ -1009,10 +1009,104 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   </div>
                 </motion.div>
               )}
-            </AnimatePresence>
+              </AnimatePresence>
+              </div>
             </div>
           </div>
         </div>
+
+        <AnimatePresence>
+          {editingUser && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl"
+              onClick={() => setEditingUser(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                onClick={e => e.stopPropagation()}
+                className="w-full max-w-md bg-zinc-900 border border-white/10 rounded-3xl p-6 space-y-6"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <AvatarDisplay profile={editingUser} className="h-14 w-14" />
+                    <div>
+                      <h3 className="text-lg font-black uppercase tracking-tight">Edit Profile</h3>
+                      <p className="text-sm text-white/40">@{editingUser.username}</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => setEditingUser(null)}
+                    size="icon"
+                    variant="ghost"
+                    className="h-10 w-10 rounded-xl"
+                  >
+                    <X className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">
+                      Username
+                    </label>
+                    <Input
+                      value={editForm.username}
+                      onChange={e => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                      placeholder="Username"
+                      className="h-12 bg-white/5 border-white/10 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">
+                      Full Name
+                    </label>
+                    <Input
+                      value={editForm.full_name}
+                      onChange={e => setEditForm(prev => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Full Name"
+                      className="h-12 bg-white/5 border-white/10 rounded-xl"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">
+                      Bio
+                    </label>
+                    <Input
+                      value={editForm.bio}
+                      onChange={e => setEditForm(prev => ({ ...prev, bio: e.target.value }))}
+                      placeholder="Bio (optional)"
+                      className="h-12 bg-white/5 border-white/10 rounded-xl"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <Button
+                    onClick={() => setEditingUser(null)}
+                    variant="ghost"
+                    className="flex-1 h-12 rounded-xl text-white/40 hover:text-white"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={() => updateUserProfile(editingUser.id, editForm)}
+                    className="flex-1 h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 font-black uppercase text-xs tracking-widest"
+                  >
+                    <Save className="w-4 h-4 mr-2" />
+                    Save Changes
+                  </Button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
 }
