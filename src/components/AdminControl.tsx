@@ -291,7 +291,15 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     fetchData();
     fetchSystemConfig();
     fetchPasswordRequests();
-    setupOnlineTracking();
+    
+    const presenceChannel = supabase.channel("admin-online-users").on("presence", { event: "sync" }, () => {
+      const state = presenceChannel.presenceState();
+      const online = new Set<string>();
+      Object.values(state).forEach((users: any) => { users.forEach((u: any) => online.add(u.user_id)); });
+      setOnlineUsers(online);
+    }).subscribe();
+
+    return () => { supabase.removeChannel(presenceChannel); };
   }, []);
 
   useEffect(() => {
@@ -421,17 +429,6 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   );
 
   const pendingRequests = users.filter(u => u.is_approved === false || u.is_approved === null);
-
-  function setupOnlineTracking() {
-    const presenceChannel = supabase.channel("admin-online-users").on("presence", { event: "sync" }, () => {
-      const state = presenceChannel.presenceState();
-      const online = new Set<string>();
-      Object.values(state).forEach((users: any) => { users.forEach((u: any) => online.add(u.user_id)); });
-      setOnlineUsers(online);
-    }).subscribe();
-
-    return () => supabase.removeChannel(presenceChannel);
-  }
 
   function formatLastSeen(lastSeen: string | null): string {
     if (!lastSeen) return "Never";
@@ -833,24 +830,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                                     <Button 
                                       variant="ghost" 
                                       className="h-12 flex-1 sm:w-12 sm:flex-none rounded-xl bg-white/5 text-orange-400 hover:bg-orange-500 hover:text-white" 
-                                      onClick={() => {
-                                        const dialog = document.createElement('dialog');
-                                        dialog.innerHTML = `
-                                          <div style="background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 1.5rem; padding: 2rem; min-width: 300px; color: white; font-family: system-ui;">
-                                            <h3 style="font-weight: 900; margin-bottom: 0.5rem;">Delete User</h3>
-                                            <p style="color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.5rem;">Delete ${user.username}? This cannot be undone.</p>
-                                            <div style="display: flex; gap: 0.5rem;">
-                                              <button id="cancel-btn" style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); border: none; border-radius: 0.75rem; color: white; cursor: pointer;">Cancel</button>
-                                              <button id="delete-btn" style="flex: 1; padding: 0.75rem; background: #ef4444; border: none; border-radius: 0.75rem; color: white; cursor: pointer; font-weight: bold;">Delete</button>
-                                            </div>
-                                          </div>
-                                        `;
-                                        document.body.appendChild(dialog);
-                                        dialog.showModal();
-                                        dialog.querySelector('#cancel-btn')?.addEventListener('click', () => { dialog.close(); dialog.remove(); });
-                                        dialog.querySelector('#delete-btn')?.addEventListener('click', () => { deleteUser(user.id); dialog.close(); dialog.remove(); });
-                                        dialog.addEventListener('click', (e) => { if (e.target === dialog) { dialog.close(); dialog.remove(); } });
-                                      }}
+                                      onClick={() => deleteUser(user.id)}
                                     >
                                       <Trash2 className="w-5 h-5" />
                                       <span className="sm:hidden ml-2">Delete</span>
@@ -943,7 +923,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                   </motion.div>
                 )}
 
-              {activeTab === "security" && (
+                {activeTab === "security" && (
                 <motion.div key="security" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-6">
                   <div className="p-8 bg-white/[0.02] border border-white/[0.05] rounded-[2.5rem] space-y-8">
                     <div className="flex items-center justify-between">
