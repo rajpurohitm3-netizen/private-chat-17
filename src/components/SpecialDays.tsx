@@ -20,27 +20,22 @@ import {
   Sparkles,
   CalendarHeart,
   Trash2,
-  Edit3,
-  Users,
-  RefreshCw
+  Edit3
 } from "lucide-react";
 
 interface SpecialDay {
   id: string;
   user_id: string;
-  friend_id: string | null;
   date: string;
   title: string;
   description: string | null;
   color: string;
   emoji: string;
   created_at: string;
-  created_by?: string;
 }
 
 interface SpecialDaysProps {
   userId: string;
-  friendId?: string;
 }
 
 const COLORS = [
@@ -63,7 +58,7 @@ const MONTHS = [
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
+export function SpecialDays({ userId }: SpecialDaysProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [specialDays, setSpecialDays] = useState<SpecialDay[]>([]);
   const [showAddModal, setShowAddModal] = useState(false);
@@ -79,52 +74,14 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
 
   useEffect(() => {
     fetchSpecialDays();
-    
-    const channel = supabase
-      .channel(`special_days_${userId}_${friendId || 'solo'}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "special_days",
-      }, (payload) => {
-        if (friendId) {
-          const record = payload.new as any || payload.old as any;
-          if (
-            (record?.user_id === userId && record?.friend_id === friendId) ||
-            (record?.user_id === friendId && record?.friend_id === userId)
-          ) {
-            fetchSpecialDays();
-          }
-        } else if ((payload.new as any)?.user_id === userId || (payload.old as any)?.user_id === userId) {
-          fetchSpecialDays();
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, friendId]);
+  }, [userId]);
 
   const fetchSpecialDays = async () => {
-    let query;
-    
-    if (friendId) {
-      query = supabase
-        .from("special_days")
-        .select("*")
-        .or(`and(user_id.eq.${userId},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${userId})`)
-        .order("date", { ascending: true });
-    } else {
-      query = supabase
-        .from("special_days")
-        .select("*")
-        .eq("user_id", userId)
-        .is("friend_id", null)
-        .order("date", { ascending: true });
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await supabase
+      .from("special_days")
+      .select("*")
+      .eq("user_id", userId)
+      .order("date", { ascending: true });
 
     if (data) {
       setSpecialDays(data);
@@ -206,31 +163,25 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
       if (error) {
         toast.error("Failed to update");
       } else {
-        toast.success("Memory updated!");
+        toast.success("Updated!");
         fetchSpecialDays();
       }
     } else {
-      const insertData: any = {
-        user_id: userId,
-        date: dateStr,
-        title: formData.title,
-        description: formData.description || null,
-        color: formData.color,
-        emoji: formData.emoji
-      };
-
-      if (friendId) {
-        insertData.friend_id = friendId;
-      }
-
       const { error } = await supabase
         .from("special_days")
-        .insert(insertData);
+        .insert({
+          user_id: userId,
+          date: dateStr,
+          title: formData.title,
+          description: formData.description || null,
+          color: formData.color,
+          emoji: formData.emoji
+        });
 
       if (error) {
         toast.error("Failed to save");
       } else {
-        toast.success("Memory added!");
+        toast.success("Special day added!");
         fetchSpecialDays();
       }
     }
@@ -252,7 +203,7 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
     if (error) {
       toast.error("Failed to delete");
     } else {
-      toast.success("Memory deleted!");
+      toast.success("Deleted!");
       fetchSpecialDays();
     }
 
@@ -298,22 +249,10 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
             <CalendarHeart className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-black uppercase italic tracking-tighter">
-              {friendId ? "Shared Memories" : "Special Days"}
-            </h2>
-            <p className="text-sm text-white/40">
-              {friendId ? "Calendar synced between you two" : "Mark your special moments"}
-            </p>
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter">Special Days</h2>
+            <p className="text-sm text-white/40">Mark your special moments</p>
           </div>
         </div>
-        {friendId && (
-          <div className="mt-4 flex items-center gap-2 px-4 py-2 bg-pink-500/10 border border-pink-500/20 rounded-xl w-fit">
-            <Users className="w-4 h-4 text-pink-400" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-pink-400">
-              Shared Calendar - Changes sync in real-time
-            </span>
-          </div>
-        )}
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -383,29 +322,15 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
 
         <div className="space-y-6">
           <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 backdrop-blur-xl">
-            <div className="flex items-center justify-between mb-6">
-              <div className="flex items-center gap-3">
-                <Sparkles className="w-5 h-5 text-amber-400" />
-                <h3 className="text-sm font-black uppercase tracking-widest">Upcoming</h3>
-              </div>
-              <Button
-                onClick={fetchSpecialDays}
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 rounded-lg text-white/40 hover:text-white"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </Button>
+            <div className="flex items-center gap-3 mb-6">
+              <Sparkles className="w-5 h-5 text-amber-400" />
+              <h3 className="text-sm font-black uppercase tracking-widest">Upcoming</h3>
             </div>
 
-            {loading ? (
-              <div className="flex justify-center py-8">
-                <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : upcomingDays.length === 0 ? (
+            {upcomingDays.length === 0 ? (
               <div className="text-center py-8">
                 <CalendarHeart className="w-12 h-12 text-white/10 mx-auto mb-4" />
-                <p className="text-sm text-white/30">No upcoming memories</p>
+                <p className="text-sm text-white/30">No upcoming special days</p>
                 <p className="text-xs text-white/20 mt-1">Tap a date to add one!</p>
               </div>
             ) : (
@@ -456,14 +381,10 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
           <div className="bg-gradient-to-br from-pink-500/10 to-rose-500/10 border border-pink-500/20 rounded-3xl p-6">
             <div className="flex items-center gap-3 mb-4">
               <Heart className="w-5 h-5 text-pink-400" />
-              <h3 className="text-sm font-black uppercase tracking-widest">
-                {friendId ? "Shared Memories" : "Total Memories"}
-              </h3>
+              <h3 className="text-sm font-black uppercase tracking-widest">Total Memories</h3>
             </div>
             <p className="text-4xl font-black text-white">{specialDays.length}</p>
-            <p className="text-xs text-white/40 mt-2 uppercase tracking-wider">
-              {friendId ? "Memories together" : "Special days marked"}
-            </p>
+            <p className="text-xs text-white/40 mt-2 uppercase tracking-wider">Special days marked</p>
           </div>
         </div>
       </div>
@@ -487,7 +408,7 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
               <div className="flex items-center justify-between">
                 <div>
                   <h3 className="text-lg font-black uppercase tracking-tight">
-                    {editingDay ? "Edit Memory" : "Add Memory"}
+                    {editingDay ? "Edit Special Day" : "Add Special Day"}
                   </h3>
                   <p className="text-sm text-white/40">
                     {selectedDate.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
@@ -584,7 +505,7 @@ export function SpecialDays({ userId, friendId }: SpecialDaysProps) {
                   onClick={handleSave}
                   className="flex-1 h-12 rounded-xl bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 font-black uppercase text-xs tracking-widest"
                 >
-                  {editingDay ? "Update" : "Save"} Memory
+                  {editingDay ? "Update" : "Save"} Special Day
                 </Button>
               </div>
             </motion.div>

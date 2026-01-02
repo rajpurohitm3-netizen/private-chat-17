@@ -3,19 +3,18 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { 
   Shield, Users, MessageSquare, Trash2, CheckCircle, X, AlertTriangle, 
     Zap, Settings2, Globe, Video as VideoIcon, UserPlus, Lock, Flame, 
     Clock, Eye, Ban, ShieldCheck, Activity, Phone, MapPin, Search, 
     ChevronRight, ArrowUpRight, Database, Server, Cpu, Layers, HardDrive, Terminal,
-    Radio, Menu, Key, Loader2, History, Calendar, Heart, Film, Music, Vault, 
-    Ghost, Edit3, TrendingUp, ChevronDown, ChevronUp, RefreshCw
+    Radio, Menu, Key, Loader2, Edit3, Save, Wifi, WifiOff
   } from "lucide-react";
 import { AvatarDisplay } from "./AvatarDisplay";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import { Switch } from "@/components/ui/switch";
-import { Input } from "@/components/ui/input";
 
 const TABS = [
   { id: "overview", label: "Intelligence Hub", icon: Activity },
@@ -23,8 +22,7 @@ const TABS = [
   { id: "requests", label: "Access Requests", icon: UserPlus },
   { id: "password", label: "Password Requests", icon: Lock },
   { id: "users", label: "Node Directory", icon: Users },
-  { id: "online_history", label: "Online History", icon: History },
-  { id: "feature_control", label: "Feature Control", icon: Settings2 },
+  { id: "online", label: "Online Status", icon: Wifi },
   { id: "security", label: "Firewall & Keys", icon: Lock },
   { id: "content", label: "Data Integrity", icon: MessageSquare },
   { id: "system", label: "Kernel Config", icon: Settings2 },
@@ -49,12 +47,14 @@ function StoriesManagement() {
         .order("created_at", { ascending: false });
       
       if (data) {
+        // Handle potential array from join
         const formattedData = data.map(story => ({
           ...story,
           profiles: Array.isArray(story.profiles) ? story.profiles[0] : story.profiles
         }));
         setStories(formattedData);
 
+        // Fetch viewer counts for all stories in one query
         const storyIds = formattedData.map(s => s.id);
         const { data: viewData } = await supabase
           .from("story_views")
@@ -82,9 +82,11 @@ function StoriesManagement() {
 
   async function deleteStory(storyId: string) {
     try {
+      // First delete story views and saves
       await supabase.from("story_views").delete().eq("story_id", storyId);
       await supabase.from("story_saves").delete().eq("story_id", storyId);
       
+      // Then delete the story itself
       const { error } = await supabase.from("stories").delete().eq("id", storyId);
       if (error) throw error;
       
@@ -162,7 +164,9 @@ function StoriesManagement() {
                     <button 
                       onClick={(e) => {
                         e.stopPropagation();
-                        deleteStory(story.id);
+                        if (window.confirm('Are you sure you want to delete this story?')) {
+                          deleteStory(story.id);
+                        }
                       }}
                       className="flex items-center gap-2 p-2 px-4 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl transition-all"
                     >
@@ -266,578 +270,6 @@ function StoriesManagement() {
   );
 }
 
-function OnlineHistoryPanel() {
-  const [users, setUsers] = useState<any[]>([]);
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [onlineHistory, setOnlineHistory] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [historyLoading, setHistoryLoading] = useState(false);
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
-
-  async function fetchUsers() {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .order("updated_at", { ascending: false });
-    if (data) setUsers(data);
-    setLoading(false);
-  }
-
-  async function fetchOnlineHistory(userId: string) {
-    setHistoryLoading(true);
-    const { data } = await supabase
-      .from("user_online_history")
-      .select("*")
-      .eq("user_id", userId)
-      .order("online_at", { ascending: false })
-      .limit(50);
-    if (data) setOnlineHistory(data);
-    setHistoryLoading(false);
-  }
-
-  function formatDuration(seconds: number): string {
-    if (!seconds) return "Unknown";
-    if (seconds < 60) return `${seconds}s`;
-    if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    return `${hours}h ${mins}m`;
-  }
-
-  function formatDateTime(dateStr: string): string {
-    const date = new Date(dateStr);
-    return date.toLocaleString('en-US', { 
-      month: 'short', 
-      day: 'numeric', 
-      hour: 'numeric', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  }
-
-  function isOnline(user: any): boolean {
-    if (!user.updated_at) return false;
-    const lastUpdate = new Date(user.updated_at);
-    const now = new Date();
-    const diffMins = (now.getTime() - lastUpdate.getTime()) / 60000;
-    return diffMins < 2;
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-6">
-          <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
-            <Users className="w-4 h-4 text-indigo-400" />
-            Select User
-          </h3>
-          {loading ? (
-            <div className="flex justify-center py-8">
-              <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-              {users.map(user => (
-                <button
-                  key={user.id}
-                  onClick={() => { setSelectedUser(user); fetchOnlineHistory(user.id); }}
-                  className={`w-full flex items-center gap-4 p-4 rounded-2xl transition-all ${
-                    selectedUser?.id === user.id 
-                      ? 'bg-indigo-600/20 border border-indigo-500/30' 
-                      : 'bg-white/[0.02] border border-white/5 hover:bg-white/[0.04]'
-                  }`}
-                >
-                  <div className="relative">
-                    <AvatarDisplay profile={user} className="h-12 w-12" />
-                    <div className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-[#0a0a0a] ${
-                      isOnline(user) ? 'bg-emerald-500' : 'bg-zinc-500'
-                    }`} />
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="font-black text-sm uppercase truncate">{user.full_name || user.username}</p>
-                    <p className="text-[10px] text-white/40 font-bold">@{user.username}</p>
-                  </div>
-                  <div className={`text-[8px] font-black uppercase px-2 py-1 rounded-lg ${
-                    isOnline(user) ? 'bg-emerald-500/20 text-emerald-400' : 'bg-zinc-500/20 text-zinc-400'
-                  }`}>
-                    {isOnline(user) ? 'Online' : 'Offline'}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-6">
-          <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
-            <History className="w-4 h-4 text-indigo-400" />
-            Online History
-          </h3>
-          {!selectedUser ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <History className="w-12 h-12 text-white/10 mb-4" />
-              <p className="text-sm text-white/30">Select a user to view history</p>
-            </div>
-          ) : historyLoading ? (
-            <div className="flex justify-center py-12">
-              <Loader2 className="w-6 h-6 text-indigo-400 animate-spin" />
-            </div>
-          ) : onlineHistory.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <Clock className="w-12 h-12 text-white/10 mb-4" />
-              <p className="text-sm text-white/30">No online history recorded</p>
-            </div>
-          ) : (
-            <div className="space-y-3 max-h-[60vh] overflow-y-auto custom-scrollbar pr-2">
-              {onlineHistory.map(record => (
-                <div key={record.id} className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                      <span className="text-xs font-bold text-emerald-400">Online</span>
-                    </div>
-                    <span className="text-[10px] text-white/40">{formatDateTime(record.online_at)}</span>
-                  </div>
-                  {record.offline_at && (
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-zinc-500" />
-                        <span className="text-xs font-bold text-zinc-400">Offline</span>
-                      </div>
-                      <span className="text-[10px] text-white/40">{formatDateTime(record.offline_at)}</span>
-                    </div>
-                  )}
-                  {record.duration_seconds && (
-                    <div className="flex items-center gap-2 mt-3 pt-3 border-t border-white/5">
-                      <Clock className="w-3 h-3 text-indigo-400" />
-                      <span className="text-[10px] font-black text-indigo-400">Duration: {formatDuration(record.duration_seconds)}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function FeatureControlPanel() {
-  const [systemConfig, setSystemConfig] = useState<any>({});
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetchConfig();
-  }, []);
-
-  async function fetchConfig() {
-    const { data } = await supabase.from("system_config").select("*");
-    if (data) {
-      const config = data.reduce((acc: any, item: any) => {
-        acc[item.key] = item.value;
-        return acc;
-      }, {});
-      setSystemConfig(config);
-    }
-    setLoading(false);
-  }
-
-  async function updateConfig(key: string, value: any) {
-    const { error } = await supabase.from("system_config").upsert({ 
-      key, 
-      value: String(value),
-      updated_at: new Date().toISOString()
-    });
-    if (error) {
-      toast.error("Failed to update config");
-    } else {
-      setSystemConfig({ ...systemConfig, [key]: String(value) });
-      toast.success("Feature updated");
-    }
-  }
-
-  const features = [
-    { key: "allow_voice_calls", label: "Voice Calls", desc: "Enable voice calling", icon: Phone, color: "emerald" },
-    { key: "allow_video_calls", label: "Video Calls", desc: "Enable video calling", icon: VideoIcon, color: "blue" },
-    { key: "allow_location_sharing", label: "Location Sharing", desc: "Enable location broadcast", icon: MapPin, color: "orange" },
-    { key: "allow_vault", label: "Private Vault", desc: "Enable secure vault", icon: Shield, color: "purple" },
-    { key: "registration_open", label: "Registration", desc: "Allow new signups", icon: UserPlus, color: "cyan" },
-    { key: "maintenance_mode", label: "Maintenance Mode", desc: "System maintenance", icon: Settings2, color: "red" },
-    { key: "allow_stories", label: "Stories", desc: "Enable stories feature", icon: Radio, color: "pink" },
-    { key: "allow_watch_party", label: "Watch Party", desc: "Enable cinema mode", icon: Film, color: "indigo" },
-    { key: "allow_music", label: "Music Player", desc: "Enable music feature", icon: Music, color: "teal" },
-    { key: "allow_memories", label: "Memories Calendar", desc: "Enable special days", icon: Calendar, color: "rose" },
-  ];
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-20">
-        <Loader2 className="w-8 h-8 text-indigo-400 animate-spin" />
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {features.map(feature => (
-          <div 
-            key={feature.key}
-            className="p-6 bg-white/[0.02] border border-white/5 rounded-[2rem] hover:border-white/10 transition-all"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className={`p-3 rounded-xl bg-${feature.color}-500/10`}>
-                  <feature.icon className={`w-5 h-5 text-${feature.color}-400`} />
-                </div>
-                <div>
-                  <p className="font-black text-sm uppercase">{feature.label}</p>
-                  <p className="text-[10px] text-white/40 font-bold mt-0.5">{feature.desc}</p>
-                </div>
-              </div>
-              <Switch 
-                checked={systemConfig[feature.key] === 'true'}
-                onCheckedChange={(v) => updateConfig(feature.key, v)}
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function UserManagementPanel({ users, onRefresh }: { users: any[]; onRefresh: () => void }) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [editingUser, setEditingUser] = useState<any>(null);
-  const [saving, setSaving] = useState(false);
-
-  const filteredUsers = users.filter(u => 
-    u.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  function isOnline(user: any): boolean {
-    if (!user.updated_at) return false;
-    const lastUpdate = new Date(user.updated_at);
-    const now = new Date();
-    const diffMins = (now.getTime() - lastUpdate.getTime()) / 60000;
-    return diffMins < 2;
-  }
-
-  function formatLastSeen(lastSeen: string | null): string {
-    if (!lastSeen) return "Never";
-    const date = new Date(lastSeen);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return "Just now";
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-  }
-
-  async function toggleApproval(userId: string, currentStatus: boolean) {
-    const { error } = await supabase.from("profiles").update({ is_approved: !currentStatus }).eq("id", userId);
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`User ${!currentStatus ? "approved" : "access revoked"}`);
-      onRefresh();
-    }
-  }
-
-  async function toggleAdmin(userId: string, currentStatus: boolean) {
-    const { error } = await supabase.from("profiles").update({ is_admin: !currentStatus }).eq("id", userId);
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`Admin status ${!currentStatus ? "granted" : "revoked"}`);
-      onRefresh();
-    }
-  }
-
-  async function deleteUser(userId: string) {
-    try {
-      const response = await fetch('/api/admin/users/delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete user');
-      }
-      
-      toast.success("User deleted successfully");
-      setSelectedUser(null);
-      onRefresh();
-    } catch (error: any) {
-      toast.error(error.message);
-    }
-  }
-
-  async function saveUserEdit() {
-    if (!editingUser) return;
-    setSaving(true);
-    
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        username: editingUser.username,
-        full_name: editingUser.full_name,
-        bio: editingUser.bio,
-        streak_count: editingUser.streak_count,
-        ghost_mode: editingUser.ghost_mode,
-        location_enabled: editingUser.location_enabled,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", editingUser.id);
-
-    if (error) {
-      toast.error("Failed to update user");
-    } else {
-      toast.success("User updated");
-      setEditingUser(null);
-      onRefresh();
-    }
-    setSaving(false);
-  }
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20" />
-          <input 
-            placeholder="Search users..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-12 pr-4 text-sm outline-none focus:border-indigo-500/50 transition-all"
-          />
-        </div>
-        <Button onClick={onRefresh} variant="ghost" className="h-12 px-4 bg-white/5 rounded-xl">
-          <RefreshCw className="w-4 h-4 mr-2" />
-          Refresh
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-3 max-h-[70vh] overflow-y-auto custom-scrollbar pr-2">
-          {filteredUsers.filter(u => u.is_approved).map((user) => (
-            <div 
-              key={user.id} 
-              onClick={() => setSelectedUser(user)}
-              className={`flex items-center gap-4 p-5 bg-white/[0.02] border rounded-2xl cursor-pointer transition-all ${
-                selectedUser?.id === user.id 
-                  ? 'border-indigo-500/50 bg-indigo-500/5' 
-                  : 'border-white/5 hover:border-white/10'
-              }`}
-            >
-              <div className="relative">
-                <AvatarDisplay profile={user} className="h-14 w-14" />
-                <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-[#0a0a0a] ${
-                  isOnline(user) ? 'bg-emerald-500' : 'bg-zinc-500'
-                }`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-black text-lg uppercase truncate">{user.full_name || user.username}</p>
-                  {user.is_admin && (
-                    <span className="text-[7px] font-black bg-indigo-600 px-1.5 py-0.5 rounded uppercase">Admin</span>
-                  )}
-                </div>
-                <p className="text-[10px] text-white/40 font-bold">@{user.username}</p>
-                <p className="text-[9px] text-white/30 mt-1">
-                  {isOnline(user) ? (
-                    <span className="text-emerald-400">Online now</span>
-                  ) : (
-                    `Last seen ${formatLastSeen(user.last_seen || user.updated_at)}`
-                  )}
-                </p>
-              </div>
-              <div className="flex flex-col items-end gap-2">
-                <div className="flex items-center gap-1 text-orange-400">
-                  <Flame className="w-4 h-4" />
-                  <span className="text-sm font-black">{user.streak_count || 0}</span>
-                </div>
-                <ChevronRight className="w-4 h-4 text-white/20" />
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="bg-white/[0.02] border border-white/5 rounded-[2rem] p-6">
-          {selectedUser ? (
-            <div className="space-y-6">
-              <div className="flex items-center gap-4">
-                <AvatarDisplay profile={selectedUser} className="h-16 w-16" />
-                <div>
-                  <p className="font-black text-xl uppercase">{selectedUser.full_name || selectedUser.username}</p>
-                  <p className="text-sm text-white/40">@{selectedUser.username}</p>
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Status</span>
-                  <span className={`text-sm font-black ${isOnline(selectedUser) ? 'text-emerald-400' : 'text-zinc-400'}`}>
-                    {isOnline(selectedUser) ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Streak</span>
-                  <span className="text-sm font-black text-orange-400">{selectedUser.streak_count || 0} days</span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Ghost Mode</span>
-                  <span className={`text-sm font-black ${selectedUser.ghost_mode ? 'text-purple-400' : 'text-white/40'}`}>
-                    {selectedUser.ghost_mode ? 'Enabled' : 'Disabled'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Joined</span>
-                  <span className="text-sm text-white/60">{new Date(selectedUser.created_at).toLocaleDateString()}</span>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Button 
-                  onClick={() => setEditingUser({ ...selectedUser })}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 h-12 rounded-xl font-black uppercase text-[10px]"
-                >
-                  <Edit3 className="w-4 h-4 mr-2" /> Edit User
-                </Button>
-                <Button 
-                  onClick={() => toggleAdmin(selectedUser.id, selectedUser.is_admin)}
-                  variant="ghost"
-                  className="w-full bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 h-12 rounded-xl font-black uppercase text-[10px]"
-                >
-                  <ShieldCheck className="w-4 h-4 mr-2" /> 
-                  {selectedUser.is_admin ? 'Revoke Admin' : 'Make Admin'}
-                </Button>
-                <Button 
-                  onClick={() => toggleApproval(selectedUser.id, selectedUser.is_approved)}
-                  variant="ghost"
-                  className="w-full bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 h-12 rounded-xl font-black uppercase text-[10px]"
-                >
-                  <Ban className="w-4 h-4 mr-2" /> 
-                  {selectedUser.is_approved ? 'Revoke Access' : 'Approve Access'}
-                </Button>
-                <Button 
-                  onClick={() => deleteUser(selectedUser.id)}
-                  variant="ghost"
-                  className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 h-12 rounded-xl font-black uppercase text-[10px]"
-                >
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete User
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full py-12">
-              <Users className="w-12 h-12 text-white/10 mb-4" />
-              <p className="text-sm text-white/30">Select a user to manage</p>
-            </div>
-          )}
-        </div>
-      </div>
-
-      <AnimatePresence>
-        {editingUser && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl"
-            onClick={() => setEditingUser(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              onClick={e => e.stopPropagation()}
-              className="w-full max-w-md bg-[#0a0a0a] border border-white/10 rounded-[2rem] p-6 space-y-6"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-black uppercase">Edit User</h3>
-                <Button onClick={() => setEditingUser(null)} size="icon" variant="ghost" className="rounded-xl">
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">Username</label>
-                  <Input
-                    value={editingUser.username}
-                    onChange={e => setEditingUser({ ...editingUser, username: e.target.value })}
-                    className="h-12 bg-white/5 border-white/10 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">Full Name</label>
-                  <Input
-                    value={editingUser.full_name || ""}
-                    onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
-                    className="h-12 bg-white/5 border-white/10 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">Bio</label>
-                  <Input
-                    value={editingUser.bio || ""}
-                    onChange={e => setEditingUser({ ...editingUser, bio: e.target.value })}
-                    className="h-12 bg-white/5 border-white/10 rounded-xl"
-                  />
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2 block">Streak Count</label>
-                  <Input
-                    type="number"
-                    value={editingUser.streak_count || 0}
-                    onChange={e => setEditingUser({ ...editingUser, streak_count: parseInt(e.target.value) || 0 })}
-                    className="h-12 bg-white/5 border-white/10 rounded-xl"
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Ghost Mode</span>
-                  <Switch 
-                    checked={editingUser.ghost_mode || false}
-                    onCheckedChange={v => setEditingUser({ ...editingUser, ghost_mode: v })}
-                  />
-                </div>
-                <div className="flex items-center justify-between p-4 bg-white/[0.02] rounded-xl">
-                  <span className="text-sm font-bold">Location Enabled</span>
-                  <Switch 
-                    checked={editingUser.location_enabled || false}
-                    onCheckedChange={v => setEditingUser({ ...editingUser, location_enabled: v })}
-                  />
-                </div>
-              </div>
-
-              <Button 
-                onClick={saveUserEdit}
-                disabled={saving}
-                className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 rounded-xl font-black uppercase text-xs"
-              >
-                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Changes"}
-              </Button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
 export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [stats, setStats] = useState({ users: 0, messages: 0 });
   const [users, setUsers] = useState<any[]>([]);
@@ -845,16 +277,21 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true);
   const [broadcastMsg, setBroadcastMsg] = useState("");
   const [sending, setSending] = useState(false);
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "stories" | "requests" | "password" | "users" | "online" | "content" | "system" | "security">("overview");
+  const [searchQuery, setSearchQuery] = useState("");
   const [kernelStatus, setKernelStatus] = useState("STABLE");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [passwordRequests, setPasswordRequests] = useState<any[]>([]);
   const [processingRequest, setProcessingRequest] = useState<string | null>(null);
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+  const [editingUser, setEditingUser] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ username: "", full_name: "", bio: "" });
 
   useEffect(() => {
     fetchData();
     fetchSystemConfig();
     fetchPasswordRequests();
+    setupOnlineTracking();
   }, []);
 
   useEffect(() => {
@@ -959,8 +396,9 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     if (!broadcastMsg.trim()) return;
     setSending(true);
     try {
+      // Use the dedicated broadcasts table for global transmission
       const { error } = await supabase.from("broadcasts").insert({
-        sender_id: "90bc36b6-3662-46ad-bf62-dbb3737628d4",
+        sender_id: "90bc36b6-3662-46ad-bf62-dbb3737628d4", // Special Admin UUID
         content: broadcastMsg,
         is_active: true
       });
@@ -977,14 +415,65 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const filteredUsers = users.filter(u => 
+    u.username?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    u.full_name?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const pendingRequests = users.filter(u => u.is_approved === false || u.is_approved === null);
-  const onlineUsers = users.filter(u => {
-    if (!u.updated_at) return false;
-    const lastUpdate = new Date(u.updated_at);
+
+  function setupOnlineTracking() {
+    const presenceChannel = supabase.channel("admin-online-users").on("presence", { event: "sync" }, () => {
+      const state = presenceChannel.presenceState();
+      const online = new Set<string>();
+      Object.values(state).forEach((users: any) => { users.forEach((u: any) => online.add(u.user_id)); });
+      setOnlineUsers(online);
+    }).subscribe();
+
+    return () => supabase.removeChannel(presenceChannel);
+  }
+
+  function formatLastSeen(lastSeen: string | null): string {
+    if (!lastSeen) return "Never";
+    const date = new Date(lastSeen);
     const now = new Date();
-    const diffMins = (now.getTime() - lastUpdate.getTime()) / 60000;
-    return diffMins < 2;
-  });
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+    const timeStr = date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24 && date.getDate() === now.getDate()) return `Today at ${timeStr}`;
+    if (diffDays === 1 || (diffHours < 48 && date.getDate() === now.getDate() - 1)) return `Yesterday at ${timeStr}`;
+    const dateStr = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return `${dateStr} at ${timeStr}`;
+  }
+
+  async function updateUserProfile(userId: string, updates: { username?: string; full_name?: string; bio?: string }) {
+    const { error } = await supabase.from("profiles").update({
+      ...updates,
+      updated_at: new Date().toISOString()
+    }).eq("id", userId);
+
+    if (error) {
+      toast.error("Failed to update profile: " + error.message);
+    } else {
+      toast.success("Profile updated successfully!");
+      fetchData();
+      setEditingUser(null);
+    }
+  }
+
+  async function deleteUser(userId: string) {
+    const { error } = await supabase.from("profiles").delete().eq("id", userId);
+    if (error) {
+      toast.error("Failed to delete user: " + error.message);
+    } else {
+      toast.success("User deleted!");
+      fetchData();
+    }
+  }
 
   if (loading) {
     return (
@@ -1049,6 +538,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                           : "text-white/30 hover:bg-white/[0.02] hover:text-white"
                       }`}
                     >
+                      {/* Gradient background for low visibility on right */}
                       <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-black/40 opacity-50 pointer-events-none" />
                       
                       <tab.icon className={`w-4 h-4 transition-transform relative z-10 ${isActive ? "text-indigo-400 scale-110" : "text-white/20 group-hover:text-white/40"}`} />
@@ -1123,7 +613,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="flex-1 overflow-hidden relative">
-          <div className="absolute inset-0 px-4 md:px-12 py-6 md:py-10 flex flex-col overflow-y-auto custom-scrollbar">
+          <div className="absolute inset-0 px-4 md:px-12 py-6 md:py-10 flex flex-col">
 
               <AnimatePresence mode="wait">
 {activeTab === "overview" && (
@@ -1132,14 +622,14 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="flex-1 min-h-0 pb-8"
+                      className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 pb-8"
                     >
                       <div className="space-y-12">
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                       {[
-                        { label: "Total Nodes", value: stats.users, icon: Globe, color: "text-blue-400" },
-                        { label: "Online Now", value: onlineUsers.length, icon: Activity, color: "text-emerald-400" },
-                        { label: "Data Packets", value: stats.messages, icon: Database, color: "text-purple-400" },
+                        { label: "Active Nodes", value: stats.users, icon: Globe, color: "text-blue-400" },
+                        { label: "Data Packets", value: stats.messages, icon: Database, color: "text-emerald-400" },
+                        { label: "Elite IDs", value: users.filter(u => u.is_admin).length, icon: ShieldCheck, color: "text-indigo-400" },
                         { label: "Pending Access", value: pendingRequests.length, icon: Radio, color: "text-orange-400" },
                       ].map((stat, i) => (
                         <div key={i} className="bg-white/[0.02] border border-white/[0.05] p-8 rounded-[2rem] hover:bg-white/[0.04] transition-all">
@@ -1181,7 +671,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                         <p className="text-sm font-black italic text-white/40 uppercase tracking-widest">No pending requests</p>
                       </div>
                     ) : (
-                      <div className="flex-1 min-h-0 space-y-6 pb-8">
+                      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 space-y-6 pb-8">
                           {pendingRequests.map((user) => (
                             <div key={user.id} className="flex flex-col sm:flex-row items-center justify-between p-8 bg-white/[0.02] border border-white/[0.05] rounded-[2.5rem] gap-6">
                                 <div className="flex items-center gap-6">
@@ -1218,7 +708,7 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                         <p className="text-sm font-black italic text-white/40 uppercase tracking-widest">No password change requests</p>
                       </div>
                     ) : (
-                      <div className="flex-1 min-h-0 space-y-6 pb-8">
+                      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2 space-y-6 pb-8">
                         {passwordRequests.map((req) => (
                           <div key={req.id} className="p-8 bg-white/[0.02] border border-white/[0.05] rounded-[2.5rem] space-y-6">
                             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
@@ -1280,22 +770,178 @@ export function AdminPanel({ onClose }: { onClose: () => void }) {
                 )}
 
 {activeTab === "users" && (
-                  <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full">
-                    <UserManagementPanel users={users} onRefresh={fetchData} />
+                    <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 h-full flex flex-col">
+                      <div className="relative group max-w-md shrink-0">
+                        <Search className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-white/20 group-focus-within:text-indigo-400 transition-colors" />
+                        <input 
+                          placeholder="Search Node Directory..."
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="w-full bg-white/5 border border-white/10 rounded-2xl py-4 pl-14 pr-6 text-sm outline-none focus:border-indigo-500/50 transition-all"
+                        />
+                      </div>
+                      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
+                        <div className="grid gap-4 pb-8">
+                            {filteredUsers.filter(u => u.is_approved).map((user) => (
+                              <div key={user.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-6 bg-white/[0.02] border border-white/[0.05] rounded-[2rem] hover:bg-white/[0.04] transition-all gap-4">
+                                  <div className="flex items-center gap-6 min-w-0 flex-1">
+                                    <div className="relative">
+                                      <AvatarDisplay profile={user} className="h-14 w-14 shrink-0" />
+                                      <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-[#050505] ${onlineUsers.has(user.id) ? 'bg-emerald-500' : 'bg-zinc-600'}`} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                      <div className="flex items-center gap-3 flex-wrap">
+                                        <div>
+                                          <p className="text-lg font-black italic text-white tracking-tighter leading-tight">{user.full_name || "No Name"}</p>
+                                          <div className="flex items-center gap-2">
+                                            <p className="text-[10px] font-black text-indigo-400 tracking-widest uppercase">@{user.username}</p>
+                                            {user.is_admin && <span className="text-[7px] font-black bg-indigo-600 px-1.5 py-0.5 rounded uppercase tracking-widest shrink-0 text-white">Admin</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <p className="text-[10px] text-white/30 font-bold uppercase tracking-widest mt-1">
+                                        {onlineUsers.has(user.id) ? (
+                                          <span className="text-emerald-400">Online Now</span>
+                                        ) : (
+                                          <span>Last seen: {formatLastSeen(user.last_seen)}</span>
+                                        )}
+                                      </p>
+                                    </div>
+                                  </div>
+                              <div className="flex gap-2 w-full sm:w-auto">
+                                <Button 
+                                  variant="ghost" 
+                                  className="h-12 flex-1 sm:w-12 sm:flex-none rounded-xl bg-white/5 text-indigo-400 hover:bg-indigo-500 hover:text-white" 
+                                  onClick={() => {
+                                    setEditingUser(user);
+                                    setEditForm({ username: user.username || "", full_name: user.full_name || "", bio: user.bio || "" });
+                                  }}
+                                >
+                                  <Edit3 className="w-5 h-5" />
+                                  <span className="sm:hidden ml-2">Edit</span>
+                                </Button>
+                                {!user.is_admin && (
+                                  <>
+                                    <Button 
+                                      variant="ghost" 
+                                      className="h-12 flex-1 sm:w-12 sm:flex-none rounded-xl bg-white/5 text-red-400 hover:bg-red-500 hover:text-white" 
+                                      onClick={() => toggleApproval(user.id, user.is_approved)}
+                                    >
+                                      <Ban className="w-5 h-5" />
+                                      <span className="sm:hidden ml-2">Ban</span>
+                                    </Button>
+                                    <Button 
+                                      variant="ghost" 
+                                      className="h-12 flex-1 sm:w-12 sm:flex-none rounded-xl bg-white/5 text-orange-400 hover:bg-orange-500 hover:text-white" 
+                                      onClick={() => {
+                                        const dialog = document.createElement('dialog');
+                                        dialog.innerHTML = `
+                                          <div style="background: #0a0a0a; border: 1px solid rgba(255,255,255,0.1); border-radius: 1.5rem; padding: 2rem; min-width: 300px; color: white; font-family: system-ui;">
+                                            <h3 style="font-weight: 900; margin-bottom: 0.5rem;">Delete User</h3>
+                                            <p style="color: rgba(255,255,255,0.5); font-size: 0.875rem; margin-bottom: 1.5rem;">Delete ${user.username}? This cannot be undone.</p>
+                                            <div style="display: flex; gap: 0.5rem;">
+                                              <button id="cancel-btn" style="flex: 1; padding: 0.75rem; background: rgba(255,255,255,0.05); border: none; border-radius: 0.75rem; color: white; cursor: pointer;">Cancel</button>
+                                              <button id="delete-btn" style="flex: 1; padding: 0.75rem; background: #ef4444; border: none; border-radius: 0.75rem; color: white; cursor: pointer; font-weight: bold;">Delete</button>
+                                            </div>
+                                          </div>
+                                        `;
+                                        document.body.appendChild(dialog);
+                                        dialog.showModal();
+                                        dialog.querySelector('#cancel-btn')?.addEventListener('click', () => { dialog.close(); dialog.remove(); });
+                                        dialog.querySelector('#delete-btn')?.addEventListener('click', () => { deleteUser(user.id); dialog.close(); dialog.remove(); });
+                                        dialog.addEventListener('click', (e) => { if (e.target === dialog) { dialog.close(); dialog.remove(); } });
+                                      }}
+                                    >
+                                      <Trash2 className="w-5 h-5" />
+                                      <span className="sm:hidden ml-2">Delete</span>
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+
+                {activeTab === "online" && (
+                  <motion.div key="online" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-8 h-full flex flex-col">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 shrink-0">
+                      <div className="p-6 bg-emerald-500/10 border border-emerald-500/20 rounded-[2rem]">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Wifi className="w-5 h-5 text-emerald-400" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Online Now</span>
+                        </div>
+                        <p className="text-4xl font-black text-white">{onlineUsers.size}</p>
+                      </div>
+                      <div className="p-6 bg-zinc-500/10 border border-zinc-500/20 rounded-[2rem]">
+                        <div className="flex items-center gap-3 mb-2">
+                          <WifiOff className="w-5 h-5 text-zinc-400" />
+                          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Offline</span>
+                        </div>
+                        <p className="text-4xl font-black text-white">{users.filter(u => u.is_approved && !onlineUsers.has(u.id)).length}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar pr-2">
+                      <h3 className="text-sm font-black uppercase tracking-widest text-emerald-400 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                        Currently Online
+                      </h3>
+                      <div className="space-y-3 mb-8">
+                        {users.filter(u => u.is_approved && onlineUsers.has(u.id)).length === 0 ? (
+                          <div className="text-center py-8 bg-white/[0.02] rounded-2xl border border-white/5">
+                            <WifiOff className="w-12 h-12 text-white/10 mx-auto mb-3" />
+                            <p className="text-white/30 text-sm">No users online</p>
+                          </div>
+                        ) : (
+                          users.filter(u => u.is_approved && onlineUsers.has(u.id)).map(user => (
+                            <div key={user.id} className="flex items-center gap-4 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl">
+                              <div className="relative">
+                                <AvatarDisplay profile={user} className="h-12 w-12" />
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#050505] animate-pulse" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-white truncate">{user.full_name || user.username}</p>
+                                <p className="text-[10px] text-emerald-400 uppercase tracking-widest font-bold">@{user.username}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-emerald-400 font-bold uppercase">Online</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <h3 className="text-sm font-black uppercase tracking-widest text-white/40 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-zinc-500 rounded-full" />
+                        Recently Active (Offline)
+                      </h3>
+                      <div className="space-y-3 pb-8">
+                        {users
+                          .filter(u => u.is_approved && !onlineUsers.has(u.id))
+                          .sort((a, b) => new Date(b.last_seen || 0).getTime() - new Date(a.last_seen || 0).getTime())
+                          .map(user => (
+                            <div key={user.id} className="flex items-center gap-4 p-4 bg-white/[0.02] border border-white/5 rounded-2xl">
+                              <div className="relative">
+                                <AvatarDisplay profile={user} className="h-12 w-12 opacity-60" />
+                                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-zinc-600 rounded-full border-2 border-[#050505]" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-black text-white/80 truncate">{user.full_name || user.username}</p>
+                                <p className="text-[10px] text-white/30 uppercase tracking-widest font-bold">@{user.username}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-[10px] text-white/40 font-bold">{formatLastSeen(user.last_seen)}</p>
+                              </div>
+                            </div>
+                          ))
+                        }
+                      </div>
+                    </div>
                   </motion.div>
                 )}
-
-              {activeTab === "online_history" && (
-                <motion.div key="online_history" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full">
-                  <OnlineHistoryPanel />
-                </motion.div>
-              )}
-
-              {activeTab === "feature_control" && (
-                <motion.div key="feature_control" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="h-full">
-                  <FeatureControlPanel />
-                </motion.div>
-              )}
 
               {activeTab === "security" && (
                 <motion.div key="security" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid gap-6">
